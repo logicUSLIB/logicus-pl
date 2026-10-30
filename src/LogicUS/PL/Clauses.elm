@@ -1,7 +1,7 @@
 module LogicUS.PL.Clauses exposing
     ( ClausePLLiteral, ClausePL, ClausePLSet
     , cplSort, cplIsPositive, cplIsNegative, cplSubsumes, cplIsTautology, csplRemoveEqClauses, csplRemoveTautClauses, csplRemoveSubsumedClauses, cplSymbols, csplSymbols, cplInterpretations, csplInterpretations, cplValuation, csplValuation, cplModels, csplModels, cplIsInsat, csplIsTaut, csplIsSat, csplIsInsat
-    , clauseLitToLiteral, csplFromCNF, fplToClauses, splToClauses
+    , clauseLitToLiteral, csplFromCNF, fplToClauses, splToClauses, fplToClausesTseitin, splToClausesTseitin
     , cplRead, cplReadFromString, cplReadExtraction, cplToInputString
     , cplToString, cplToMathString, csplToString, csplToMathString, csplToDIMACS
     )
@@ -21,7 +21,7 @@ module LogicUS.PL.Clauses exposing
 
 # Formulas and Clauses
 
-@docs clauseLitToLiteral, csplFromCNF, fplToClauses, splToClauses
+@docs clauseLitToLiteral, csplFromCNF, fplToClauses, splToClauses, fplToClausesTseitin, splToClausesTseitin
 
 
 # Clauses Parser
@@ -40,7 +40,7 @@ module LogicUS.PL.Clauses exposing
 --=========--
 
 import Dict exposing (Dict)
-import LogicUS.PL.AuxiliarFunctions exposing (cleanSpaces, powerset, uniqueConcatList)
+import LogicUS.PL.AuxiliarFunctions exposing (cleanSpaces, parserErrorToString, powerset, uniqueConcatList)
 import LogicUS.PL.NormalForms as PL_NF
 import LogicUS.PL.SyntaxSemantics as PL_SS exposing (FormulaPL(..), Interpretation, Literal, PSymb, SetPL)
 import Parser exposing ((|.), (|=), Parser, Trailing(..))
@@ -386,71 +386,55 @@ csplIsInsat cs =
 csplFromCNF : FormulaPL -> Maybe ClausePLSet
 csplFromCNF f =
     let
-        csplFromCNFAux g =
-            case g of
+        toClauseLit l =
+            case l of
                 Atom symb ->
-                    Just [ [ ( symb, True ) ] ]
+                    Just ( symb, True )
 
                 Neg (Atom symb) ->
-                    Just [ [ ( symb, False ) ] ]
-
-                Disj g1 g2 ->
-                    Maybe.map (\c -> [ c ]) <|
-                        Maybe.map cplSort <|
-                            Maybe.map2 uniqueConcatList
-                                (Maybe.map List.concat <| csplFromCNFAux g1)
-                                (Maybe.map List.concat <| csplFromCNFAux g2)
-
-                Insat ->
-                    Just [ [] ]
-
-                Taut ->
-                    Just []
+                    Just ( symb, False )
 
                 _ ->
                     Nothing
     in
-    case f of
-        Conj f1 f2 ->
-            Maybe.map2 uniqueConcatList (csplFromCNF f1) (csplFromCNF f2)
-
-        Atom symb ->
-            Just [ [ ( symb, True ) ] ]
-
-        Neg (Atom symb) ->
-            Just [ [ ( symb, False ) ] ]
-
-        Disj f1 f2 ->
-            Maybe.map (\c -> [ c ]) <|
-                Maybe.map cplSort <|
-                    Maybe.map2 uniqueConcatList
-                        (Maybe.map List.concat <| csplFromCNFAux f1)
-                        (Maybe.map List.concat <| csplFromCNFAux f2)
-
-        Insat ->
-            Just [ [] ]
-
-        Taut ->
-            Just []
-
-        _ ->
-            Nothing
+    PL_NF.cnfAsLiteralSets f
+        |> Maybe.map (List.map (cplSort << List.filterMap toClauseLit))
 
 
-{-| Express a formula as a Set of clauses. (Uses Tseitin Transformation)
+{-| Express a formula as a set of clauses with the same models, through its conjunctive normal form (it may grow exponentially; see `fplToClausesTseitin` for a linear alternative).
+
+    f1 = fplRead "¬p & q <-> r"
+    fplToClauses f1 == [[("p",True),("r",True),("q",False)],[("p",False),("r",False)],[("q",True),("r",False)]]
 
 -}
 fplToClauses : FormulaPL -> ClausePLSet
 fplToClauses f =
-    csplRemoveTautClauses <| csplRemoveSubsumedClauses <| Maybe.withDefault [ [] ] <| csplFromCNF <| PL_NF.flpToCNFTseitin f
+    csplRemoveTautClauses <| csplRemoveSubsumedClauses <| Maybe.withDefault [ [] ] <| csplFromCNF <| PL_NF.fplToCNF f
 
 
-{-| Express a set of formulas as a Set of clauses. (Uses Tseitin Transformation)
+{-| Express a set of formulas as a set of clauses with the same models, through the conjunctive normal form of each formula.
+
+    fs = List.map fplRead ["p->q", "p | q -> r", "¬p | q"]
+    splToClauses fs == [[("q",True),("p",False)],[("r",True),("p",False)],[("r",True),("q",False)]]
 
 -}
 splToClauses : SetPL -> ClausePLSet
 splToClauses fs =
     csplRemoveTautClauses <| csplRemoveSubsumedClauses <| List.concat <| List.map fplToClauses fs
+
+
+{-| Express a formula as a set of clauses through the Tseitin transformation (see `LogicUS.PL.NormalForms.splToCNFTseitin`). The result is _equisatisfiable_ with the formula, not equivalent: it uses fresh symbols `𝜏ᵢ`, but its size is linear in the size of the formula.
+-}
+fplToClausesTseitin : FormulaPL -> ClausePLSet
+fplToClausesTseitin f =
+    splToClausesTseitin [ f ]
+
+
+{-| Express a set of formulas as a set of clauses through the Tseitin transformation. The fresh symbols `𝜏ᵢ` are shared by the whole set, so the result is equisatisfiable with the set.
+-}
+splToClausesTseitin : SetPL -> ClausePLSet
+splToClausesTseitin fs =
+    csplRemoveTautClauses <| Maybe.withDefault [ [] ] <| csplFromCNF <| PL_NF.splToCNFTseitin fs
 
 
 
@@ -489,18 +473,18 @@ cplReadFromString x =
         "{" ->
             case Parser.run cplParser clean_x of
                 Ok y ->
-                    ( (Maybe.Just << cplSort) y, "", "" )
+                    ( Maybe.Just (cplSort (uniqueConcatList [] y)), "", "" )
 
                 Err y ->
-                    ( Maybe.Nothing, clean_x, "Error: " ++ String.replace "\"" "'" (Debug.toString y) )
+                    ( Maybe.Nothing, clean_x, parserErrorToString clean_x 0 y )
 
         _ ->
             case Parser.run cplParser ("{" ++ clean_x ++ "}") of
                 Ok y ->
-                    ( Maybe.Just y, "", "" )
+                    ( Maybe.Just (cplSort (uniqueConcatList [] y)), "", "" )
 
                 Err y ->
-                    ( Maybe.Nothing, "{" ++ clean_x ++ "}", "Error: " ++ String.replace "\"" "'" (Debug.toString y) )
+                    ( Maybe.Nothing, "{" ++ clean_x ++ "}", parserErrorToString ("{" ++ clean_x ++ "}") 1 y )
 
 
 {-| It extracts the clause readed. If it is Nothing then it returns an empty clause

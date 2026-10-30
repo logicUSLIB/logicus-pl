@@ -46,7 +46,7 @@ module LogicUS.PL.HornRS exposing (
 -- IMPORTS --
 --=========--
 
-import LogicUS.PL.AuxiliarFunctions as AUX
+import LogicUS.PL.AuxiliarFunctions as AUX exposing (parserErrorToString)
 import LogicUS.PL.Clauses as PL_CL exposing (ClausePL, ClausePLSet)
 import LogicUS.PL.SyntaxSemantics as PL_SS exposing (FormulaPL(..), PSymb, SetPL)
 import Parser exposing ((|.), (|=), Parser, Trailing(..))
@@ -651,7 +651,7 @@ hornFactReadFromString x =
                     ( Maybe.Just y, hornFactToInputString y, "" )
 
                 Err y ->
-                    ( Maybe.Nothing, s, "Error: " ++ String.replace "\"" "'" (Debug.toString y) )
+                    ( Maybe.Nothing, s, parserErrorToString s 0 y )
 
 
 {-| It extract the Horn fact read. If it is not present it returns a fact of inconsistency
@@ -740,7 +740,7 @@ hornKBReadFromString x =
                     ( Maybe.Just y, hornKBToInputString y, "" )
 
                 Err y ->
-                    ( Maybe.Nothing, s, "Error: " ++ String.replace "\"" "'" (Debug.toString y) )
+                    ( Maybe.Nothing, s, parserErrorToString s 0 y )
 
 
 {-| It extract the Horn KB read. If it is not present it returns an empty set
@@ -795,7 +795,7 @@ hornRuleReadFromString x =
                     ( Maybe.Just y, (String.join " & " <| List.map hornFactToInputString <| Set.toList <| Tuple.first y) ++ "->" ++ (hornFactToInputString <| Tuple.second y), "" )
 
                 Err y ->
-                    ( Maybe.Nothing, s, "Error: " ++ String.replace "\"" "'" (Debug.toString y) )
+                    ( Maybe.Nothing, s, parserErrorToString s 0 y )
 
 
 {-| It extract the Horn rule read. If it is not present it returns a rule with inconsistence as antecedent and consecuent
@@ -859,7 +859,7 @@ hornRulesReadFromString x =
                     ( Maybe.Just y, hornRulesToInputString y, "" )
 
                 Err y ->
-                    ( Maybe.Nothing, s, "Error: " ++ String.replace "\"" "'" (Debug.toString y) )
+                    ( Maybe.Nothing, s, parserErrorToString s 0 y )
 
 
 {-| It extract the list of Horn rules read. If it is not present it returns an empty list

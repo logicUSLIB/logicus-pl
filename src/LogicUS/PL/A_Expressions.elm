@@ -1,7 +1,7 @@
 module LogicUS.PL.A_Expressions exposing (A_Expr, evaluateAExpr, expressionA, parseAExpr, toMathStringAExpr, toStringAExpr, varsInA_Expr)
 
 import Dict exposing (Dict)
-import LogicUS.PL.AuxiliarFunctions exposing (uniqueConcatList)
+import LogicUS.PL.AuxiliarFunctions exposing (parserErrorToString, uniqueConcatList)
 import Maybe
 import Parser exposing (..)
 import Tuple
@@ -78,7 +78,7 @@ parseAExpr str =
                 ( Just y, "" )
 
             Err y ->
-                ( Nothing, Debug.toString y )
+                ( Nothing, parserErrorToString str 0 y )
 
 
 numberParser : Parser Int

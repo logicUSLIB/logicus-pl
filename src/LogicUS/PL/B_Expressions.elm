@@ -4,7 +4,7 @@ module LogicUS.PL.B_Expressions exposing (..)
 
 import Dict exposing (Dict)
 import LogicUS.PL.A_Expressions exposing (..)
-import LogicUS.PL.AuxiliarFunctions exposing (uniqueConcatList)
+import LogicUS.PL.AuxiliarFunctions exposing (parserErrorToString, uniqueConcatList)
 import Parser exposing (..)
 
 
@@ -154,7 +154,7 @@ parseBExpr str =
                 ( Just y, "" )
 
             Err m ->
-                ( Nothing, Debug.toString m )
+                ( Nothing, parserErrorToString str 0 m )
 
 
 termBExpr : Parser B_Expr

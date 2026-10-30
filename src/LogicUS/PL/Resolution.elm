@@ -248,8 +248,16 @@ csplSaturationResolutionAux cs hist =
 
     else
         let
+            known =
+                List.map PL_CL.cplSort cs
+
+            -- Only the resolvents not obtained before: the set is saturated (and satisfiable)
+            -- when a level adds no new clause.
             cs2 =
                 csplAllResolvents cs
+                    |> List.map PL_CL.cplSort
+                    |> LE.unique
+                    |> List.filter (\c -> not (List.member c known))
         in
         if List.isEmpty cs2 then
             ( False, hist ++ [ cs ] )
@@ -570,10 +578,27 @@ csplSCFLinearResolution clauses =
             List.indexedMap (\i x -> ( i + 1, { c = x, p1 = 0, p2 = 0, l1 = ( ( "", [] ), True ), l2 = ( ( "", [] ), False ) } )) <| List.sortBy (\x -> List.length x) <| PL_CL.csplRemoveSubsumedClauses <| PL_CL.csplRemoveTautClauses <| cs
     in
     let
+        -- Linear resolution is complete only if every input clause may be the top clause:
+        -- try them in order (shortest first) until one gives a refutation.
         ( nodes, edges ) =
-            csplSCFLinearResolutionAux [] Dict.empty new_cs (List.length new_cs + 1)
+            List.range 0 (List.length new_cs - 1)
+                |> LE.findMap
+                    (\k ->
+                        let
+                            rotated =
+                                List.drop k new_cs ++ List.take k new_cs
+
+                            result =
+                                csplSCFLinearResolutionAux [] Dict.empty rotated (List.length new_cs + 1)
+                        in
+                        if List.isEmpty (Tuple.first result) then
+                            Nothing
+
+                        else
+                            Just result
+                    )
+                |> Maybe.withDefault ( [], [] )
     in
-    -- ( nodes, edges )
     let
         nid_max =
             Maybe.withDefault 0 <| List.maximum <| List.map (\x -> x.id) <| nodes

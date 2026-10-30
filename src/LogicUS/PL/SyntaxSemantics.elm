@@ -66,7 +66,7 @@ module LogicUS.PL.SyntaxSemantics exposing
 import Graph exposing (Edge, Graph, Node, NodeId)
 import Graph.DOT as GDOT exposing (defaultStyles)
 import List.Extra as LE
-import LogicUS.PL.AuxiliarFunctions as AUX
+import LogicUS.PL.AuxiliarFunctions as AUX exposing (parserErrorToString)
 import Parser exposing ((|.), (|=), Parser, Trailing(..))
 import Set exposing (Set)
 
@@ -729,7 +729,11 @@ logicalConsecuence2 fs f =
 -}
 logicalConsecuence : SetPL -> FormulaPL -> Bool
 logicalConsecuence fs f =
-    List.all (\x -> fplValuation f x) (splModels fs)
+    -- The interpretations must range over the symbols of F too: a symbol that only
+    -- occurs in F can take either value in a model of S.
+    splInterpretations (f :: fs)
+        |> List.filter (splValuation fs)
+        |> List.all (fplValuation f)
 
 
 
@@ -781,7 +785,7 @@ fplReadFromString x =
                     ( Maybe.Just y, fplToInputString y, "" )
 
                 Err y ->
-                    ( Maybe.Nothing, "(" ++ s ++ ")", "Error: " ++ String.replace "\"" "'" (Debug.toString y) )
+                    ( Maybe.Nothing, "(" ++ s ++ ")", parserErrorToString ("(" ++ s ++ ")") 1 y )
 
 
 {-| It extract the formula readed. If it is Nothing it returns Insat
@@ -1046,7 +1050,7 @@ interpretationReadFromString x =
                     ( (Maybe.Just << Set.toList << Set.fromList) y, "" )
 
                 Err y ->
-                    ( Maybe.Nothing, "Error: " ++ String.replace "\"" "'" (Debug.toString y) )
+                    ( Maybe.Nothing, parserErrorToString s 0 y )
 
 
 {-| It extract the interpretation readed. If it is Nothing it returns an empty list (all vars taking as false).

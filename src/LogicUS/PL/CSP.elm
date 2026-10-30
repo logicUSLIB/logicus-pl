@@ -32,7 +32,7 @@ module LogicUS.PL.CSP exposing
 import Dict exposing (Dict)
 import List.Extra as LE
 import LogicUS.PL.A_Expressions as Aux_AE exposing (A_Expr)
-import LogicUS.PL.AuxiliarFunctions exposing (uniqueConcatList)
+import LogicUS.PL.AuxiliarFunctions exposing (parserErrorToString, uniqueConcatList)
 import LogicUS.PL.B_Expressions as Aux_BE exposing (B_Expr)
 import LogicUS.PL.Clauses as PL_CL exposing (ClausePL, ClausePLSet, fplToClauses)
 import LogicUS.PL.SyntaxSemantics as PL_SS exposing (FormulaPL, Interpretation, PSymb)
@@ -376,7 +376,7 @@ bfplReadFromString str =
                     ( Nothing, "Illegal use of indices" )
 
             Err err ->
-                ( Nothing, "Syntax Error: " ++ (Debug.toString <| err) ++ str )
+                ( Nothing, parserErrorToString (String.replace " " "" <| String.replace "\n" "" <| "(" ++ str ++ ")") 1 err )
 
 
 {-| It allows to extract the formula readed. If there is a parsing error, then it returns Insat formula
@@ -592,10 +592,10 @@ varsClauses cs =
 
                 _ ->
                     if s then
-                        Dict.insert a ( c, 1 ) ac
+                        Dict.insert a ( c, 0 ) ac
 
                     else
-                        Dict.insert a ( 1, c ) ac
+                        Dict.insert a ( 0, c ) ac
         )
         Dict.empty
         (List.map (\( l, xs ) -> ( l, List.length xs + 1 )) <| LE.gatherEquals <| List.concat <| cs)
@@ -661,13 +661,19 @@ solverAux asig av_vars cls =
 
     else
         case getVarsUnitaryClauses cls of
-            x :: xs ->
+            x :: _ ->
+                -- Propagate one unit literal at a time: propagating {p} and {¬p} together
+                -- would mark both clauses as satisfied and miss the conflict.
                 let
                     new_asig =
-                        asig ++ (List.map Tuple.first <| List.filter Tuple.second (x :: xs))
+                        if Tuple.second x then
+                            asig ++ [ Tuple.first x ]
+
+                        else
+                            asig
 
                     ( new_av_vars, new_cls ) =
-                        updationAvailable (x :: xs) av_vars cls
+                        updationAvailable [ x ] av_vars cls
                 in
                 solverAux new_asig new_av_vars new_cls
 
@@ -697,7 +703,18 @@ solverAux asig av_vars cls =
                             ME.or (solverAux new_asig1 new_av_vars1 new_cls1) (solverAux asig new_av_vars2 new_cls2)
 
                     Nothing ->
-                        Just asig
+                        case cls of
+                            [] ->
+                                Just asig
+
+                            (( v, _ ) :: _) :: _ ->
+                                -- Defensive: a clause is still pending although no counted variable is left.
+                                ME.or
+                                    (solverAux (asig ++ [ v ]) (Dict.remove v av_vars) (Tuple.second (updationAvailable [ ( v, True ) ] av_vars cls)))
+                                    (solverAux asig (Dict.remove v av_vars) (Tuple.second (updationAvailable [ ( v, False ) ] av_vars cls)))
+
+                            _ ->
+                                Nothing
 
 
 {-| It allows resolve the satisfiability of a set of BigFormulas using Backtracking + MRV

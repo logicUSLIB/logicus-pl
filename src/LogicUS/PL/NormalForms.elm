@@ -1,11 +1,16 @@
-module LogicUS.PL.NormalForms exposing (fplContainsEquiv, fplContainsDisj, fplContainsConj, fplRemoveAllEquiv, fplContainsImpl, fplRemoveAllImpl, fplInteriorizeAllDisj, fplInteriorizeAllConj, fplToNNF, fplToCNF, fplToDNF, dnfAsLiteralSets, cnfAsLiteralSets, fplSatisfiabilityDNF, fplModelsDNF, fplValidityCNF, flpToCNFTseitin)
+module LogicUS.PL.NormalForms exposing (fplContainsEquiv, fplContainsDisj, fplContainsConj, fplRemoveAllEquiv, fplContainsImpl, fplRemoveAllImpl, fplInteriorizeAllDisj, fplInteriorizeAllConj, fplToNNF, fplToCNF, fplToDNF, dnfAsLiteralSets, cnfAsLiteralSets, fplSatisfiabilityDNF, fplModelsDNF, fplValidityCNF, fplToCNFTseitin, splToCNFTseitin, flpToCNFTseitin)
 
 {-| The module provides the tools for express formulas in their NN, CNF, DNF.
 
 
 # Normal Forms
 
-@docs fplContainsEquiv, fplContainsDisj, fplContainsConj, fplRemoveAllEquiv, fplContainsImpl, fplRemoveAllImpl, fplInteriorizeAllDisj, fplInteriorizeAllConj, fplToNNF, fplToCNF, fplToDNF, dnfAsLiteralSets, cnfAsLiteralSets, fplSatisfiabilityDNF, fplModelsDNF, fplValidityCNF, flpToCNFTseitin
+@docs fplContainsEquiv, fplContainsDisj, fplContainsConj, fplRemoveAllEquiv, fplContainsImpl, fplRemoveAllImpl, fplInteriorizeAllDisj, fplInteriorizeAllConj, fplToNNF, fplToCNF, fplToDNF, dnfAsLiteralSets, cnfAsLiteralSets, fplSatisfiabilityDNF, fplModelsDNF, fplValidityCNF
+
+
+# Tseitin transformation
+
+@docs fplToCNFTseitin, splToCNFTseitin, flpToCNFTseitin
 
 -}
 
@@ -15,11 +20,9 @@ module LogicUS.PL.NormalForms exposing (fplContainsEquiv, fplContainsDisj, fplCo
 
 import LogicUS.PL.AuxiliarFunctions exposing (uniqueConcatList)
 import LogicUS.PL.SyntaxSemantics as PL_SS exposing (FormulaPL(..), Interpretation, SetPL)
-import LogicUS.PL.SyntaxSemantics exposing (PSymb)
-import List.Extra exposing (elemIndex)
 import List exposing (length)
-import List.Extra exposing (unique)
-import LogicUS.PL.SyntaxSemantics exposing (splConjunction)
+import List.Extra exposing (elemIndex, unique)
+import LogicUS.PL.SyntaxSemantics exposing (PSymb)
 
 
 
@@ -504,66 +507,91 @@ fplToDNF f =
 -}
 dnfAsLiteralSets : FormulaPL -> Maybe (List SetPL)
 dnfAsLiteralSets f =
-    case f of
-        Disj f1 f2 ->
-            Maybe.map2 uniqueConcatList (dnfAsLiteralSets f1) (dnfAsLiteralSets f2)
-
-        Atom _ ->
-            Just [ [ f ] ]
-
-        Neg (Atom _) ->
-            Just [ [ f ] ]
-
-        Conj f1 f2 ->
-            Maybe.map
-                (\c -> [ c ])
-                (Maybe.map2
-                    uniqueConcatList
-                    (Maybe.map (List.sortWith compareLiterals << List.concat) <| dnfAsLiteralSets f1)
-                    (Maybe.map (List.sortWith compareLiterals << List.concat) <| dnfAsLiteralSets f2)
-                )
-
-        Insat ->
-            Just []
-
-        Taut ->
-            Just [ [] ]
-
-        _ ->
-            Nothing
+    literalSets False f
 
 
 {-| It gives a formula in CNF as a list of literal sets. If the formula given is not in CNF it returns Nothing.
 -}
 cnfAsLiteralSets : FormulaPL -> Maybe (List SetPL)
 cnfAsLiteralSets f =
-    case f of
-        Conj f1 f2 ->
-            Maybe.map2 uniqueConcatList (cnfAsLiteralSets f1) (cnfAsLiteralSets f2)
+    literalSets True f
 
-        Atom _ ->
-            Just [ [ f ] ]
 
-        Neg (Atom _) ->
-            Just [ [ f ] ]
+{-| Shared implementation of `cnfAsLiteralSets` (`cnf = True`) and `dnfAsLiteralSets` (`cnf = False`).
 
-        Disj f1 f2 ->
-            Maybe.map
-                (\c -> [ c ])
-                (Maybe.map2
-                    uniqueConcatList
-                    (Maybe.map (List.sortWith compareLiterals << List.concat) <| cnfAsLiteralSets f1)
-                    (Maybe.map (List.sortWith compareLiterals << List.concat) <| cnfAsLiteralSets f2)
-                )
+In CNF the outer connective is ∧ and the groups are clauses (∨): a clause containing ⊤ is dropped, ⊥ inside a clause is
+neutral and ⊥ alone is the empty clause. DNF is the dual (⊥ drops a conjunction, ⊤ is neutral in it).
 
-        Insat ->
-            Just [ [] ]
+-}
+literalSets : Bool -> FormulaPL -> Maybe (List SetPL)
+literalSets cnf f =
+    let
+        ( absorbing, neutral ) =
+            if cnf then
+                ( Taut, Insat )
 
-        Taut ->
-            Just []
+            else
+                ( Insat, Taut )
 
-        _ ->
-            Nothing
+        normConst g =
+            case g of
+                Neg Insat ->
+                    Taut
+
+                Neg Taut ->
+                    Insat
+
+                _ ->
+                    g
+
+        -- Nothing: not in the expected form; Just Nothing: the group is absorbed (dropped)
+        group : FormulaPL -> Maybe (Maybe SetPL)
+        group g =
+            case ( cnf, normConst g ) of
+                ( True, Disj a b ) ->
+                    Maybe.map2 (Maybe.map2 uniqueConcatList) (group a) (group b)
+
+                ( False, Conj a b ) ->
+                    Maybe.map2 (Maybe.map2 uniqueConcatList) (group a) (group b)
+
+                ( _, Atom x ) ->
+                    Just (Just [ Atom x ])
+
+                ( _, Neg (Atom x) ) ->
+                    Just (Just [ Neg (Atom x) ])
+
+                ( _, h ) ->
+                    if h == neutral then
+                        Just (Just [])
+
+                    else if h == absorbing then
+                        Just Nothing
+
+                    else
+                        Nothing
+
+        top : FormulaPL -> Maybe (List SetPL)
+        top g =
+            case ( cnf, normConst g ) of
+                ( True, Conj a b ) ->
+                    Maybe.map2 uniqueConcatList (top a) (top b)
+
+                ( False, Disj a b ) ->
+                    Maybe.map2 uniqueConcatList (top a) (top b)
+
+                _ ->
+                    group g
+                        |> Maybe.map
+                            (\m ->
+                                case m of
+                                    Just ls ->
+                                        [ List.sortWith compareLiterals ls ]
+
+                                    Nothing ->
+                                        []
+                            )
+    in
+    top f
 
 
 {-| It gives if a set of literals has two that are contrary
@@ -675,99 +703,155 @@ compareLiterals l1 l2 =
 
 
 
---- TSEITIN TRANSFORMATION
+--=======================--
+-- TSEITIN TRANSFORMATION --
+--=======================--
 
-tseitinVar : FormulaPL -> List FormulaPL -> (PSymb, List FormulaPL) 
-tseitinVar p ls =
-    case elemIndex p ls of
-        Just i -> (("𝜏",[i]), ls)
-        Nothing ->  (("𝜏",[length ls]), ls ++ [p])
 
-tseitinProcess : FormulaPL -> List FormulaPL -> List FormulaPL -> (PSymb, List FormulaPL, List FormulaPL)
-tseitinProcess p cnf3ls subfvars =
-    case p of
-        Atom var_p -> (var_p, cnf3ls, subfvars)
+{-| Fresh symbol used by the Tseitin transformation for the i-th compound subformula.
+-}
+tseitinSymbol : Int -> PSymb
+tseitinSymbol i =
+    ( "𝜏", [ i ] )
 
-        Neg f ->
-            let
-                (var_p, newsubfvars1) = tseitinVar p subfvars
-            in
-            let
-                (var_f, newcnf3ls1, newsubfvars2) = tseitinProcess f cnf3ls newsubfvars1
-            in
-            let
-                newcnf3ls2 = newcnf3ls1 ++ [Disj (Neg (Atom var_p)) (Neg (Atom var_f)), Disj (Atom var_p) (Atom var_f)]
-            in
-            (var_p, newcnf3ls2, newsubfvars2)
-            
-            
 
-        Conj f g ->
-            let
-                (var_p, newsubfvars1) = tseitinVar p subfvars
-            in
-            let
-                (var_f, newcnf3ls1, newsubfvars2) = tseitinProcess f cnf3ls newsubfvars1
-            in
-            let
-                (var_g, newcnf3ls2, newsubfvars3) = tseitinProcess g newcnf3ls1 newsubfvars2
-            in
-            let
-                newcnf3ls3 = newcnf3ls2 ++ [Disj (Neg (Atom var_p)) (Atom var_f), Disj (Neg (Atom var_p)) (Atom var_g), 
-                                            Disj (Atom var_p) (Disj (Neg (Atom var_f)) (Neg (Atom var_g)))]
-                -- (¬var_subfórmula ∨ var_ψ), (¬var_subfórmula ∨ var_θ), (var_subfórmula ∨ ¬var_ψ ∨ ¬var_θ)
-            in
-            (var_p, newcnf3ls3, newsubfvars3)
-
-        Disj f g ->
-             let
-                (var_p, newsubfvars1) = tseitinVar p subfvars
-            in
-            let
-                (var_f, newcnf3ls1, newsubfvars2) = tseitinProcess f cnf3ls newsubfvars1
-            in
-            let
-                (var_g, newcnf3ls2, newsubfvars3) = tseitinProcess g newcnf3ls1 newsubfvars2
-            in
-            let
-                newcnf3ls3 = newcnf3ls2 ++ [Disj (Atom var_p) (Neg (Atom var_f)), Disj (Atom var_p) (Neg (Atom var_g)), 
-                                            Disj (Neg (Atom var_p)) (Disj (Atom var_f) (Atom var_g))]
-                -- (¬var_subfórmula ∨ var_ψ ∨ var_θ), (var_subfórmula ∨ ¬var_ψ), (var_subfórmula ∨ ¬var_θ)
-            in
-            (var_p, newcnf3ls3, newsubfvars3)
-
-        Impl f g ->
-            tseitinProcess (Disj (Neg f) g) cnf3ls subfvars
-
-        Equi f g ->
-            tseitinProcess (Disj (Conj f g) (Conj (Neg f) (Neg g))) cnf3ls subfvars
+litNeg : FormulaPL -> FormulaPL
+litNeg l =
+    case l of
+        Neg (Atom a) ->
+            Atom a
 
         Insat ->
-            let
-                (var_p, newsubfvars1) = tseitinVar p subfvars
-            in
-            let
-                newcnf3ls1 = cnf3ls ++ [Neg (Atom var_p)]
-            in
-            (var_p, newcnf3ls1, newsubfvars1)
+            Taut
 
         Taut ->
-            let
-                (var_p, newsubfvars1) = tseitinVar p subfvars
-            in
-            let
-                newcnf3ls1 = cnf3ls ++ [Atom var_p]
-            in
-            (var_p, newcnf3ls1, newsubfvars1)
+            Insat
+
+        _ ->
+            Neg l
 
 
-{-| It perfoms the Tseitin transformation over an FPL (giving a 3-CNF).
+{-| Builds a clause (as a disjunction) from literals: a clause with ⊤ is dropped and ⊥ literals are removed.
 -}
+tseitinClause : List FormulaPL -> List FormulaPL
+tseitinClause lits =
+    if List.member Taut lits then
+        []
 
-flpToCNFTseitin : FormulaPL -> FormulaPL 
-flpToCNFTseitin p =
+    else
+        [ PL_SS.splDisjunction (unique (List.filter ((/=) Insat) lits)) ]
+
+
+type alias TseitinState =
+    { named : List FormulaPL
+    , clauses : List FormulaPL
+    }
+
+
+{-| Gives the literal that stands for a subformula, adding the definitional clauses of the fresh symbol when needed.
+-}
+tseitinLiteral : FormulaPL -> TseitinState -> ( FormulaPL, TseitinState )
+tseitinLiteral g st =
+    case g of
+        Atom _ ->
+            ( g, st )
+
+        Neg (Atom _) ->
+            ( g, st )
+
+        Insat ->
+            ( g, st )
+
+        Taut ->
+            ( g, st )
+
+        _ ->
+            case elemIndex g st.named of
+                Just i ->
+                    ( Atom (tseitinSymbol i), st )
+
+                Nothing ->
+                    let
+                        x =
+                            Atom (tseitinSymbol (length st.named))
+
+                        nx =
+                            Neg x
+
+                        st1 =
+                            { st | named = st.named ++ [ g ] }
+
+                        binary a b defs =
+                            let
+                                ( la, st2 ) =
+                                    tseitinLiteral a st1
+
+                                ( lb, st3 ) =
+                                    tseitinLiteral b st2
+                            in
+                            ( x, { st3 | clauses = st3.clauses ++ List.concatMap tseitinClause (defs la lb) } )
+                    in
+                    case g of
+                        Neg a ->
+                            let
+                                ( la, st2 ) =
+                                    tseitinLiteral a st1
+                            in
+                            ( x, { st2 | clauses = st2.clauses ++ List.concatMap tseitinClause [ [ nx, litNeg la ], [ x, la ] ] } )
+
+                        Conj a b ->
+                            binary a b (\la lb -> [ [ nx, la ], [ nx, lb ], [ x, litNeg la, litNeg lb ] ])
+
+                        Disj a b ->
+                            binary a b (\la lb -> [ [ nx, la, lb ], [ x, litNeg la ], [ x, litNeg lb ] ])
+
+                        Impl a b ->
+                            binary a b (\la lb -> [ [ nx, litNeg la, lb ], [ x, la ], [ x, litNeg lb ] ])
+
+                        Equi a b ->
+                            binary a b (\la lb -> [ [ nx, litNeg la, lb ], [ nx, la, litNeg lb ], [ x, la, lb ], [ x, litNeg la, litNeg lb ] ])
+
+                        _ ->
+                            ( g, st )
+
+
+{-| It performs the Tseitin transformation of a set of formulas. The result is a formula in CNF (at most three literals per clause) that is _equisatisfiable_ with the set, not equivalent to it: each compound subformula gets a fresh symbol `𝜏ᵢ` defined by an equivalence. Equal subformulas share their symbol, also across different formulas of the set, so the result grows linearly with the size of the set (the usual CNF may grow exponentially).
+
+    splToCNFTseitin [ fplRead "p & q -> r" ]
+        == Conj (Conj (Conj (Conj (Disj (Neg (Atom ( "𝜏", [ 0 ] ))) (Disj (Neg (Atom ( "𝜏", [ 1 ] ))) (Atom ( "r", [] )))) ...
+
+-}
+splToCNFTseitin : SetPL -> FormulaPL
+splToCNFTseitin fs =
     let
-        (var_p, cnf3ls, _) = tseitinProcess p [] []
+        st =
+            List.foldl
+                (\f acc ->
+                    let
+                        ( l, acc2 ) =
+                            tseitinLiteral f acc
+                    in
+                    { acc2 | clauses = acc2.clauses ++ tseitinClause [ l ] }
+                )
+                { named = [], clauses = [] }
+                fs
     in
-    splConjunction <| unique (cnf3ls ++ [(Atom var_p)])
-    
+    if List.member Insat st.clauses then
+        Insat
+
+    else
+        PL_SS.splConjunction (unique st.clauses)
+
+
+{-| It performs the Tseitin transformation of a formula (see `splToCNFTseitin`).
+-}
+fplToCNFTseitin : FormulaPL -> FormulaPL
+fplToCNFTseitin f =
+    splToCNFTseitin [ f ]
+
+
+{-| Deprecated: misspelled name kept for compatibility. Use `fplToCNFTseitin`.
+-}
+flpToCNFTseitin : FormulaPL -> FormulaPL
+flpToCNFTseitin =
+    fplToCNFTseitin
