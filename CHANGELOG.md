@@ -18,7 +18,9 @@ algorithm with truth tables computed independently of the library.
   and `fplModelsDNF` (e.g. `⊥ ∧ ⊥` was reported satisfiable).
 - `CSP.solver` (and `sbfplsolver`) propagated all unit clauses at once, so `{p}, {¬p}` was reported
   satisfiable.
-- `csplSCFLinearResolution` only tried the first clause as top clause and could miss refutations.
+- `csplSCFLinearResolution` only tried the first clause as top clause and could miss refutations; it also explored
+  every branch after finding a refutation.
+- An input containing the empty clause was reported satisfiable by the graph-based resolution functions.
 - `csplSaturationResolution` did not terminate on satisfiable sets.
 - `cplReadFromString` keeps each literal once.
 - Parser error messages no longer show internal Elm values: they say what was read and what was

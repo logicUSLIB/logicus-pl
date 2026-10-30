@@ -60,6 +60,16 @@ suite =
                 R.csplSaturationResolution [ [ ( ( "p", [] ), True ), ( ( "q", [] ), True ) ], [ ( ( "p", [] ), False ), ( ( "q", [] ), True ) ] ]
                     |> Tuple.first
                     |> Expect.equal False
+        , test "every resolution method refutes an input that already has the empty clause" <|
+            \_ ->
+                [ R.csplSCFResolution [ [], [ ( ( "p", [] ), True ) ] ] |> Tuple.first
+                , R.csplSCFLinearResolution [ [], [ ( ( "p", [] ), True ) ] ] |> Tuple.first
+                , R.csplSCFPositiveResolution [ [], [ ( ( "p", [] ), True ) ] ] |> Tuple.first
+                , R.csplSCFNegativeResolution [ [], [ ( ( "p", [] ), True ) ] ] |> Tuple.first
+                , R.csplSCFUnitaryResolution [ [], [ ( ( "p", [] ), True ) ] ] |> Tuple.first
+                , R.csplSCFByEntriesResolution [ [], [ ( ( "p", [] ), True ) ] ] |> Tuple.first
+                ]
+                    |> Expect.equal (List.repeat 6 True)
         , test "cplRead removes repeated literals" <|
             \_ -> CL.cplRead "{¬p, ¬p}" |> Expect.equal [ ( ( "p", [] ), False ) ]
         , test "parser errors are readable" <|

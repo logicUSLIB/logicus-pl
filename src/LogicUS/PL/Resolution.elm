@@ -462,7 +462,8 @@ csplSCFResolution clauses =
             List.map (\x -> Node x.id ( List.member x.label cs, x.label )) nodes
                 ++ (List.indexedMap (\i x -> Node (nid_max + i + 1) ( True, x )) <| List.filter (\x -> not (List.member x nodes_clauses)) cs)
     in
-    ( edges /= [], Graph.fromNodesAndEdges final_nodes edges )
+    -- refuted if some resolution step was made or the input already contained the empty clause
+    ( edges /= [] || List.any (\n -> List.isEmpty n.label) nodes, Graph.fromNodesAndEdges final_nodes edges )
 
 
 
@@ -547,14 +548,21 @@ csplSCFLinearResolutionAux closed resDone opened nid =
                     newResDone =
                         Dict.insert id (List.map Tuple.first <| closed ++ xs) <| Dict.map (\_ v -> v ++ [ id ]) resDone
                 in
-                Maybe.withDefault ( [], [] ) <|
-                    List.head <|
-                        List.filter
-                            (not << List.isEmpty << Tuple.first)
-                        <|
-                            List.map
-                                (\ri -> csplSCFLinearResolutionAux newClosed newResDone (( nid + 1, ri ) :: xs) (nid + 1))
-                                resolvents_i
+                -- stop at the first branch that reaches the empty clause (List.map would explore all of them)
+                resolvents_i
+                    |> LE.findMap
+                        (\ri ->
+                            let
+                                result =
+                                    csplSCFLinearResolutionAux newClosed newResDone (( nid + 1, ri ) :: xs) (nid + 1)
+                            in
+                            if List.isEmpty (Tuple.first result) then
+                                Nothing
+
+                            else
+                                Just result
+                        )
+                    |> Maybe.withDefault ( [], [] )
 
 
 {-| It uses linear resolution algorithm using shortest clause first heuristic for determining the feasibilibity of a set of clauses. It gives the insatisfactibility (True:Insat, False:SAT) and a graph with the resolution path to inconsitence. If clause set is feasible then a graph with only initial nodes is returned.
@@ -611,7 +619,8 @@ csplSCFLinearResolution clauses =
             List.map (\x -> Node x.id ( List.member x.label cs, x.label )) nodes
                 ++ (List.indexedMap (\i x -> Node (nid_max + i + 1) ( True, x )) <| List.filter (\x -> not (List.member x nodes_clauses)) cs)
     in
-    ( edges /= [], Graph.fromNodesAndEdges final_nodes edges )
+    -- refuted if some resolution step was made or the input already contained the empty clause
+    ( edges /= [] || List.any (\n -> List.isEmpty n.label) nodes, Graph.fromNodesAndEdges final_nodes edges )
 
 
 
@@ -754,7 +763,8 @@ csplSCFPositiveResolution clauses =
             List.map (\x -> Node x.id ( List.member x.label cs, x.label )) nodes
                 ++ (List.indexedMap (\i x -> Node (nid_max + i + 1) ( True, x )) <| List.filter (\x -> not (List.member x nodes_clauses)) cs)
     in
-    ( edges /= [], Graph.fromNodesAndEdges final_nodes edges )
+    -- refuted if some resolution step was made or the input already contained the empty clause
+    ( edges /= [] || List.any (\n -> List.isEmpty n.label) nodes, Graph.fromNodesAndEdges final_nodes edges )
 
 
 
@@ -897,7 +907,8 @@ csplSCFNegativeResolution clauses =
             List.map (\x -> Node x.id ( List.member x.label cs, x.label )) nodes
                 ++ (List.indexedMap (\i x -> Node (nid_max + i + 1) ( True, x )) <| List.filter (\x -> not (List.member x nodes_clauses)) cs)
     in
-    ( edges /= [], Graph.fromNodesAndEdges final_nodes edges )
+    -- refuted if some resolution step was made or the input already contained the empty clause
+    ( edges /= [] || List.any (\n -> List.isEmpty n.label) nodes, Graph.fromNodesAndEdges final_nodes edges )
 
 
 
@@ -1040,7 +1051,8 @@ csplSCFUnitaryResolution clauses =
             List.map (\x -> Node x.id ( List.member x.label cs, x.label )) nodes
                 ++ (List.indexedMap (\i x -> Node (nid_max + i + 1) ( True, x )) <| List.filter (\x -> not (List.member x nodes_clauses)) cs)
     in
-    ( edges /= [], Graph.fromNodesAndEdges final_nodes edges )
+    -- refuted if some resolution step was made or the input already contained the empty clause
+    ( edges /= [] || List.any (\n -> List.isEmpty n.label) nodes, Graph.fromNodesAndEdges final_nodes edges )
 
 
 
@@ -1184,7 +1196,8 @@ csplSCFByEntriesResolution clauses =
             List.map (\x -> Node x.id ( List.member x.label cs, x.label )) nodes
                 ++ (List.indexedMap (\i x -> Node (nid_max + i + 1) ( True, x )) <| List.filter (\x -> not (List.member x nodes_clauses)) cs)
     in
-    ( edges /= [], Graph.fromNodesAndEdges final_nodes edges )
+    -- refuted if some resolution step was made or the input already contained the empty clause
+    ( edges /= [] || List.any (\n -> List.isEmpty n.label) nodes, Graph.fromNodesAndEdges final_nodes edges )
 
 
 
