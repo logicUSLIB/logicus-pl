@@ -24,5 +24,7 @@ Modules designed provides the tools that allow the definition, execution and vis
 
 - **_LogicUS.PL.HornRS_**: It provides the methods and structures for working with Horn Reasoning Systems: rules and facts definition, forward and backward chaining, conversion to Horn clauses, ...
 
+- **_LogicUS.PL.Deduction_** and **_LogicUS.PL.DeductionSystems_**: Deduction systems given by their rules, written as schemas (`rule →I : [A] B ⊢ A → B`, `rule ∨E : A ∨ B, [A] C, [B] C ⊢ C`, `axiom A1 : A → (B → A)`), so that each exercise says which rules can be used. Proofs in the style of Fitch are checked line by line, with an explanation of each error, and the module gives the rules that can be used at the end of a proof: forward from the lines, closing the current subproof, or backward from the goal. A rule that is not valid gets a counterexample (a valuation of its letters). The presets are natural deduction (classical, intuitionistic, with derived rules) and an axiomatic system; `LogicUS.FOL.Deduction` (logicus-fol) extends them to first-order logic.
+
 
 You can access to the installation guide, theoretical and practical contents, and more at [LogicUS](https://www.cs.us.es/~fsancho/LogicUS/).

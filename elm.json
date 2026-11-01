@@ -3,7 +3,7 @@
     "name": "logicUSLIB/logicus-pl",
     "summary": "Elm package for working with Propositional Logic.",
     "license": "BSD-3-Clause",
-    "version": "4.1.0",
+    "version": "4.2.0",
     "exposed-modules": [
         "LogicUS.PL.SyntaxSemantics",
         "LogicUS.PL.SemanticTableaux",
@@ -12,7 +12,9 @@
         "LogicUS.PL.DPLL",
         "LogicUS.PL.Resolution",
         "LogicUS.PL.CSP",
-        "LogicUS.PL.HornRS"
+        "LogicUS.PL.HornRS",
+        "LogicUS.PL.Deduction",
+        "LogicUS.PL.DeductionSystems"
     ],
     "elm-version": "0.19.1 <= v < 0.19.2",
     "dependencies": {
